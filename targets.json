@@ -1,0 +1,7 @@
+{
+  "launched": false,
+  "uptimeTarget": "99.5%",
+  "components": [
+    { "name": "Crosstie app", "url": "https://crossties.pro/api/v1/health" }
+  ]
+}

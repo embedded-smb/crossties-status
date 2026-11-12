@@ -1,0 +1,30 @@
+name: Monitor
+
+# Checks Crosstie about every 5 minutes (GitHub may delay scheduled runs when it's busy) and publishes
+# the result to this repository's GitHub Pages site, which runs on separate hosting from Crosstie.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check each component
+        run: python3 scripts/check.py
+      - name: Publish the result
+        run: |
+          git config user.name "crosstie-status"
+          git config user.email "status@crossties.pro"
+          git add status.json history.json
+          git diff --cached --quiet || (git commit -q -m "Status at $(date -u +%FT%TZ)" && git push -q)

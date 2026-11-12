@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crosstie status</title>
+  <style>
+    :root { --bg: #f6f5f1; --fg: #1e2a24; --muted: #5d6a63; --card: #fff; --line: #dcdcd4; --up: #2e7d4f; --down: #b3261e; --off: #8a8a80; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #151a17; --fg: #e8ece9; --muted: #a3ada7; --card: #1e2521; --line: #33403a; --up: #6fcf97; --down: #ff8a80; --off: #8c958f; } }
+    body { margin: 0; font: 16px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+    main { max-width: 44rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+    h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+    .muted { color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+    .row { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .up { color: var(--up); } .down { color: var(--down); } .off { color: var(--off); }
+    .bars { display: flex; gap: 2px; margin-top: .5rem; }
+    .bars span { flex: 1; height: 1.5rem; border-radius: 2px; background: var(--line); }
+    .bars span.good { background: var(--up); } .bars span.bad { background: var(--down); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Crosstie status</h1>
+  <p class="muted" id="summary">Loading…</p>
+  <section id="components" aria-label="Components"></section>
+  <section class="card" aria-labelledby="notices"><h2 id="notices" style="font-size:1.1rem;margin:0">Maintenance and incidents</h2><div id="incidents" class="muted">None.</div></section>
+  <p class="muted" id="target"></p>
+</main>
+<script>
+(async () => {
+  const get = async (f) => (await fetch(f, { cache: 'no-store' })).json();
+  const [targets, status, history, notes] = await Promise.all([get('targets.json'), get('status.json'), get('history.json'), get('incidents.json')]);
+  const summary = document.getElementById('summary');
+  document.getElementById('target').textContent = `Uptime goal: ${targets.uptimeTarget} a month. Maintenance announced more than 3 days ahead doesn't count against it.`;
+  if (!targets.launched) {
+    summary.textContent = 'Crosstie hasn’t launched yet. This page will show live status once it has.';
+    return;
+  }
+  const checked = status.checkedAt ? new Date(status.checkedAt).toLocaleString() : 'not yet';
+  const allUp = status.components.length > 0 && status.components.every((c) => c.ok);
+  summary.innerHTML = `<strong class="${allUp ? 'up' : 'down'}">${allUp ? 'All systems working' : 'Some systems are down'}</strong> · checked ${checked}`;
+  const days = Object.keys(history.days).sort().slice(-90);
+  const list = document.getElementById('components');
+  for (const c of targets.components) {
+    const now = status.components.find((s) => s.name === c.name);
+    let checks = 0, up = 0;
+    const bars = days.map((d) => {
+      const t = history.days[d][c.name];
+      if (!t) return '<span title="' + d + ': no data"></span>';
+      checks += t.checks; up += t.up;
+      const pct = t.up / t.checks;
+      return `<span class="${pct >= 0.995 ? 'good' : 'bad'}" title="${d}: ${(pct * 100).toFixed(2)}% up"></span>`;
+    }).join('');
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div class="row"><strong>${c.name}</strong><span class="${now?.ok ? 'up' : 'down'}">${now?.ok ? 'Working' : 'Down'}</span></div>` +
+      `<div class="muted">${checks ? ((up / checks) * 100).toFixed(2) + '% up over ' + days.length + ' days' : 'No checks yet'}</div><div class="bars" aria-hidden="true">${bars}</div>`;
+    list.appendChild(card);
+  }
+  const items = [...notes.maintenance.map((m) => `Planned: ${m.when}. ${m.text}`), ...notes.incidents.map((i) => `${i.when}: ${i.text}`)];
+  if (items.length) document.getElementById('incidents').innerHTML = '<ul>' + items.map((t) => `<li>${t.replace(/</g, '&lt;')}</li>`).join('') + '</ul>';
+})();
+</script>
+</body>
+</html>
